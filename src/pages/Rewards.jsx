@@ -10,6 +10,9 @@ import {
   FiCreditCard,
 } from "react-icons/fi";
 
+
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 /* --------------------------- Styles --------------------------- */
 
 const Page = styled.div`

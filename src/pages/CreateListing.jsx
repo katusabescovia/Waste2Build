@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 // Backend base URL (change to production later, e.g. https://api.waste2build.com)
-const BASE_URL = "http://localhost:5000";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_BASE = `${BASE_URL}/api/materials`;
 
 const Page = styled.div`

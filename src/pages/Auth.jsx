@@ -4,7 +4,7 @@ import { FiMail, FiLock, FiUser, FiMapPin, FiPhone, FiEye, FiEyeOff } from "reac
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_BASE = "http://localhost:5000/api/auth"; // ← your backend URL
+const API_BASE =  process.env.REACT_APP_API_URL|| "http://localhost:5000"; // ← your backend URL
 
 const Page = styled.div`
   padding: 0 0 60px;
@@ -281,7 +281,7 @@ export default function Auth() {
           role: role,
         };
 
-        response = await axios.post(`${API_BASE}/register`, payload);
+        response = await axios.post(`${API_BASE}/api/auth/register`, payload);
 
         if (response.data.success) {
           setSuccessMsg("Successfully registered! Please login to continue");
@@ -303,7 +303,7 @@ export default function Auth() {
           password: form.password,
         };
 
-        response = await axios.post(`${API_BASE}/login`, payload);
+        response = await axios.post(`${API_BASE}/api/auth/login`, payload);
 
         if (response.data.success && response.data.token) {
           const { token, user } = response.data;

@@ -3,6 +3,12 @@ import styled from 'styled-components';
 import { FiArrowLeft, FiUser, FiPhone, FiMapPin, FiCalendar, FiUpload, FiInfo, FiCheckCircle } from 'react-icons/fi';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 
+
+
+
+
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 // ─── Your original styles (100% unchanged) ─────────────────────────────────────
 const Page = styled.div`
   min-height: 100vh;
@@ -506,7 +512,7 @@ export default function PickupConfirmation() {
           return;
         }
 
-        const res = await fetch(`http://localhost:5000/api/materials/my-accepted/${pickupId}`, {
+        const res = await fetch(`${BASE_URL}/api/materials/my-accepted/${pickupId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -552,7 +558,7 @@ export default function PickupConfirmation() {
         formData.append("proofPhotos", file);
       });
 
-      const res = await fetch(`http://localhost:5000/api/materials/${pickupId}/confirm-pickup`, {
+      const res = await fetch(`${BASE_URL}/api/materials/${pickupId}/confirm-pickup`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

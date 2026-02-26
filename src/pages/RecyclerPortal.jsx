@@ -3,6 +3,10 @@ import styled from "styled-components";
 import { FiBox, FiCheckCircle, FiClock, FiLayers, FiEye, FiCheck } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
 
+
+
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 const Page = styled.div`
   padding: 0 0 60px;
 `;
@@ -273,7 +277,7 @@ export default function RecyclerPortal() {
         }
 
         // 1. Recycler dashboard stats
-        const statsRes = await fetch("http://localhost:5000/api/materials/recycler/dashboard", {
+        const statsRes = await fetch(`${BASE_URL}/api/materials/recycler/dashboard`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!statsRes.ok) throw new Error("Failed to load dashboard stats");
@@ -281,13 +285,13 @@ export default function RecyclerPortal() {
         setDashboardStats(statsJson);
 
         // 2. All materials (public)
-        const allRes = await fetch("http://localhost:5000/api/materials");
+        const allRes = await fetch(`${BASE_URL}/api/materials`);
         if (!allRes.ok) throw new Error("Failed to load materials");
         const allJson = await allRes.json();
         setListings(allJson.materials || []);
 
         // 3. My accepted listings (includes pickup_confirmed)
-        const acceptedRes = await fetch("http://localhost:5000/api/materials/my-accepted", {
+        const acceptedRes = await fetch(`${BASE_URL}/api/materials/my-accepted`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!acceptedRes.ok) throw new Error("Failed to load accepted listings");
@@ -295,7 +299,7 @@ export default function RecyclerPortal() {
         setMyAccepted(acceptedJson.materials || []);
 
         // 4. User name
-        const userRes = await fetch("http://localhost:5000/api/auth/me", {
+        const userRes = await fetch(`${BASE_URL}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (userRes.ok) {

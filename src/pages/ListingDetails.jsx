@@ -10,6 +10,9 @@ import {
   FiX,
 } from "react-icons/fi";
 import { Link, useNavigate, useParams } from "react-router-dom";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
+// In useEffect
 
 /* --------------------------- Layout (your original styles – 100% unchanged) --------------------------- */
 
@@ -404,20 +407,20 @@ export default function ListingDetails() {
       try {
         const token = localStorage.getItem("token");
 
-        const materialRes = await fetch(`http://localhost:5000/api/materials/${id}`);
+        const materialRes = await fetch(`${BASE_URL}/api/materials/${id}`);
         if (!materialRes.ok) throw new Error("Listing not found");
         const materialJson = await materialRes.json();
         if (!materialJson.success) throw new Error(materialJson.message || "Failed to load");
 
         const material = materialJson.material;
         if (material.photo && !material.photo.startsWith('http')) {
-          material.photo = `http://localhost:5000${material.photo}`;
+          material.photo = `${BASE_URL}${material.photo}`;
         }
 
         setListing(material);
 
         if (token) {
-          const userRes = await fetch("http://localhost:5000/api/auth/me", {
+          const userRes = await fetch(`${BASE_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (userRes.ok) {
@@ -461,7 +464,7 @@ export default function ListingDetails() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`http://localhost:5000/api/materials/${id}/accept`, {
+      const res = await fetch(`${BASE_URL}/api/materials/${id}/accept`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -493,7 +496,7 @@ export default function ListingDetails() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`http://localhost:5000/api/materials/${id}/cancel-accept`, {
+      const res = await fetch(`${BASE_URL}/api/materials/${id}/cancel-accept`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

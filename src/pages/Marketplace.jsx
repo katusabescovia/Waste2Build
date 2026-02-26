@@ -3,6 +3,9 @@ import styled from "styled-components";
 import { FiSearch, FiMapPin, FiBox, FiUser } from "react-icons/fi";
 import { Link } from "react-router-dom";
 
+
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 const Page = styled.div``;
 
 const Header = styled.section`
@@ -255,7 +258,7 @@ export default function Marketplace() {
     const fetchData = async () => {
       try {
         // 1. Fetch public available listings
-        const res = await fetch("http://localhost:5000/api/materials");
+        const res = await fetch(`${BASE_URL}/api/materials`);
         if (!res.ok) throw new Error("Failed to load marketplace");
         const json = await res.json();
         if (!json.success) throw new Error(json.message || "Error");
@@ -267,7 +270,7 @@ export default function Marketplace() {
         // 2. Check logged-in user role (optional – no token = guest)
         const token = localStorage.getItem("token");
         if (token) {
-          const userRes = await fetch("http://localhost:5000/api/auth/me", {
+          const userRes = await fetch(`${BASE_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (userRes.ok) {
