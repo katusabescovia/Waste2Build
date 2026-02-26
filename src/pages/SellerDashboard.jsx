@@ -1,9 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import styled from "styled-components";
 import { FiPlus, FiBox, FiTrendingUp, FiGift, FiCheckCircle, FiClock, FiEye } from "react-icons/fi";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+
+// Backend base URL (change to production later)
+const BASE_URL = "http://localhost:5000";
+const API_ME = `${BASE_URL}/api/auth/me`; // endpoint to get logged-in user
 
 /* --------------------------- Styles --------------------------- */
+// Your existing styles remain 100% unchanged — no modifications here
 
 const Page = styled.div`
   padding: 0 0 60px;
@@ -389,36 +395,87 @@ const Empty = styled.div`
   line-height: 1.6;
 `;
 
-/* --------------------------- Mock Data --------------------------- */
-
-const MOCK_LISTINGS = [
-  { id: "1", title: "Clean PET Plastic Bottles", weightKg: 25, totalPrice: 3750, status: "available" },
-  { id: "2", title: "HDPE Plastic Containers", weightKg: 40, totalPrice: 7200, status: "available" },
-  { id: "3", title: "Mixed Plastic Bags", weightKg: 15, totalPrice: 1800, status: "pending" },
-];
-
-const MOCK_TX = [
-  { id: "t1", amount: 5250, date: "2/8/2026", points: 525, status: "Completed" },
-  { id: "t2", amount: 2400, date: "2/5/2026", points: 240, status: "Completed" },
-  { id: "t3", amount: 3600, date: "2/1/2026", points: 360, status: "Completed" },
-];
+/* --------------------------- Component --------------------------- */
 
 export default function SellerDashboard() {
+  const [userName, setUserName] = useState("Seller"); // fallback
+  const [dashboardData, setDashboardData] = useState(null);
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [tab, setTab] = useState("active"); // active | pending | all
 
+  const navigate = useNavigate();
+
+  // Fetch logged-in user's name + dashboard data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          setError("Please log in to view your dashboard");
+          setLoading(false);
+          navigate("/auth");
+          return;
+        }
+
+        // 1. Get current user (for real name in "Welcome back")
+        const meRes = await axios.get(`${BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (meRes.data.success && meRes.data.user?.fullName) {
+          setUserName(meRes.data.user.fullName);
+        }
+
+        // 2. Fetch seller dashboard stats (adjust endpoint if needed)
+        const dashboardRes = await axios.get(`${BASE_URL}/api/materials/seller/dashboard`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setDashboardData(dashboardRes.data);
+
+        // 3. Fetch seller's own listings
+        const listingsRes = await axios.get(`${BASE_URL}/api/materials/my-listings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setListings(listingsRes.data.materials || []);
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+        setError(err.response?.data?.message || "Failed to load dashboard");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [navigate]);
+
   const rows = useMemo(() => {
-    if (tab === "active") return MOCK_LISTINGS.filter((x) => x.status === "available");
-    if (tab === "pending") return MOCK_LISTINGS.filter((x) => x.status === "pending");
-    return MOCK_LISTINGS;
-  }, [tab]);
+    if (tab === "active") return listings.filter((x) => x.status === "available");
+    if (tab === "pending") return listings.filter((x) => x.status === "accepted"); // adjust if needed
+    return listings;
+  }, [tab, listings]);
 
   const totals = useMemo(() => {
-    const totalEarnings = MOCK_TX.reduce((s, x) => s + x.amount, 0);
-    const totalListings = MOCK_LISTINGS.length;
-    const totalWeight = MOCK_LISTINGS.reduce((s, x) => s + x.weightKg, 0);
-    const couponValue = 3500;
-    return { totalEarnings, totalListings, totalWeight, couponValue };
-  }, []);
+    if (!dashboardData) {
+      return { totalEarnings: 0, totalListings: 0, totalWeight: 0, totalQuantityAdded: 0 };
+    }
+
+    return {
+      totalEarnings: dashboardData.totalEarnings || 0,
+      totalListings: dashboardData.totalProductsAdded || 0,
+      totalWeight: dashboardData.totalQuantitySold || 0,
+      totalQuantityAdded: dashboardData.totalQuantityAdded || 0,
+    };
+  }, [dashboardData]);
+
+  if (loading) return <div style={{ textAlign: "center", padding: "50px" }}>Loading your dashboard...</div>;
+
+  if (error) return <div style={{ textAlign: "center", padding: "50px", color: "#ef4444" }}>Error: {error}</div>;
 
   return (
     <Page>
@@ -426,7 +483,7 @@ export default function SellerDashboard() {
         <Container>
           <HeadRow>
             <div>
-              <Title>Welcome back, User!</Title>
+              <Title>Welcome back, {userName}!</Title>
               <Sub>Here’s your selling activity overview.</Sub>
             </div>
 
@@ -482,8 +539,8 @@ export default function SellerDashboard() {
             <Stat>
               <StatTop>
                 <div>
-                  <StatLabel>Coupon Value</StatLabel>
-                  <StatValue>₦{totals.couponValue.toLocaleString()}</StatValue>
+                  <StatLabel>Total Weight Added</StatLabel>
+                  <StatValue>{totals.totalQuantityAdded.toLocaleString()}</StatValue>
                   <StatHint>3 active coupons</StatHint>
                 </div>
                 <StatIcon $tone="#FFF7E6">
@@ -501,13 +558,13 @@ export default function SellerDashboard() {
 
               <Tabs>
                 <Tab type="button" $active={tab === "active"} onClick={() => setTab("active")}>
-                  Active (3)
+                  Active ({rows.filter((x) => x.status === "available").length})
                 </Tab>
                 <Tab type="button" $active={tab === "pending"} onClick={() => setTab("pending")}>
-                  Pending (1)
+                  Pending ({rows.filter((x) => x.status === "accepted").length})
                 </Tab>
                 <Tab type="button" $active={tab === "all"} onClick={() => setTab("all")}>
-                  All (3)
+                  All ({listings.length})
                 </Tab>
               </Tabs>
 
@@ -517,11 +574,11 @@ export default function SellerDashboard() {
                 ) : (
                   <List>
                     {rows.map((x) => (
-                      <Row key={x.id}>
+                      <Row key={x._id}>
                         <div>
                           <ItemTitle>{x.title}</ItemTitle>
                           <ItemSub>
-                            {x.weightKg} kg • ₦{x.totalPrice.toLocaleString()}
+                            {x.quantity} {x.unit} • ₦{x.totalPrice.toLocaleString()}
                           </ItemSub>
                         </div>
 
@@ -531,11 +588,11 @@ export default function SellerDashboard() {
 
                         <Small>
                           <strong>Listing ID</strong>
-                          <div>{x.id}</div>
+                          <div>{x._id}</div>
                         </Small>
 
                         <Actions>
-                          <ViewBtn to={`/listings/${x.id}`}>
+                          <ViewBtn to={`/listings/${x._id}`}>
                             <FiEye /> View
                           </ViewBtn>
                         </Actions>
@@ -592,21 +649,19 @@ export default function SellerDashboard() {
 
                 <CardBody>
                   <Transactions>
-                    {MOCK_TX.map((t) => (
-                      <Tx key={t.id}>
-                        <TxLeft>
-                          <TxAmount>₦{t.amount.toLocaleString()}</TxAmount>
-                          <TxDate>{t.date}</TxDate>
-                        </TxLeft>
-
-                        <TxRight>
-                          <Points>+{t.points} points</Points>
-                          <Status>
-                            <FiCheckCircle /> {t.status}
-                          </Status>
-                        </TxRight>
-                      </Tx>
-                    ))}
+                    {/* Replace with real data from backend later */}
+                    <Tx>
+                      <TxLeft>
+                        <TxAmount>₦5,250</TxAmount>
+                        <TxDate>2/8/2026</TxDate>
+                      </TxLeft>
+                      <TxRight>
+                        <Points>+525 points</Points>
+                        <Status>
+                          <FiCheckCircle /> Completed
+                        </Status>
+                      </TxRight>
+                    </Tx>
                   </Transactions>
                 </CardBody>
               </Card>

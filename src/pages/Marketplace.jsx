@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import styled from "styled-components";
 import { FiSearch, FiMapPin, FiBox, FiUser } from "react-icons/fi";
 import { Link } from "react-router-dom";
@@ -134,6 +135,8 @@ const Card = styled.div`
 const Img = styled.div`
   height: 185px;
   background: #e2e8f0;
+  background-size: cover;
+  background-position: center;
 `;
 
 const CardBody = styled.div`
@@ -227,93 +230,67 @@ const Button = styled(Link)`
   text-align: center;
   padding: 12px 14px;
   border-radius: ${({ theme }) => theme.radius.md};
-  background: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme, $disabled }) => $disabled ? '#d1d5db' : theme.colors.primary};
   color: white;
   font-weight: 900;
+  pointer-events: ${({ $disabled }) => $disabled ? 'none' : 'auto'};
+  opacity: ${({ $disabled }) => $disabled ? 0.6 : 1};
+  cursor: ${({ $disabled }) => $disabled ? 'not-allowed' : 'pointer'};
 `;
 
-const listingsData = [
-  {
-    id: "1",
-    title: "Clean PET Plastic Bottles",
-    desc: "Sorted and cleaned plastic bottles from household collection. Ready for recycling.",
-    weightKg: 25,
-    location: "Lagos, Nigeria",
-    seller: "Sarah Johnson",
-    totalPrice: 3750,
-    perKg: 150,
-    status: "available",
-    tag: "pet plastic",
-    tagTone: "#EAF3FF",
-  },
-  {
-    id: "2",
-    title: "HDPE Plastic Containers",
-    desc: "High-density polyethylene containers from small business. Clean and sorted.",
-    weightKg: 40,
-    location: "Abuja, Nigeria",
-    seller: "Green Collectors Co.",
-    totalPrice: 7200,
-    perKg: 180,
-    status: "available",
-    tag: "hdpe plastic",
-    tagTone: "#EAF3FF",
-  },
-  {
-    id: "3",
-    title: "Mixed Plastic Bags",
-    desc: "Collected plastic bags from neighborhood. Sorted and bundled.",
-    weightKg: 15,
-    location: "Port Harcourt, Nigeria",
-    seller: "Student Eco Initiative",
-    totalPrice: 1800,
-    perKg: 120,
-    status: "available",
-    tag: "plastic bags",
-    tagTone: "#F2EDFF",
-  },
-  {
-    id: "4",
-    title: "PP Plastic Scraps",
-    desc: "Polypropylene plastic scraps from manufacturing. High quality material.",
-    weightKg: 60,
-    location: "Kano, Nigeria",
-    seller: "Industrial Waste Solutions",
-    totalPrice: 12000,
-    perKg: 200,
-    status: "pending",
-    tag: "pp plastic",
-    tagTone: "#F2EDFF",
-  },
-  {
-    id: "5",
-    title: "Metal Cans Aluminum",
-    desc: "Sorted aluminum cans from beverage collection. Clean and compressed.",
-    weightKg: 30,
-    location: "Ibadan, Nigeria",
-    seller: "Community Recyclers",
-    totalPrice: 7500,
-    perKg: 250,
-    status: "available",
-    tag: "metal cans",
-    tagTone: "#F1F5F9",
-  },
-  {
-    id: "6",
-    title: "Cardboard and Paper",
-    desc: "Clean cardboard boxes and paper from office collection.",
-    weightKg: 50,
-    location: "Lagos, Nigeria",
-    seller: "Sarah Johnson",
-    totalPrice: 4000,
-    perKg: 80,
-    status: "available",
-    tag: "paper cardboard",
-    tagTone: "#FFF1E6",
-  },
-];
+const DisabledText = styled.div`
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+`;
 
 export default function Marketplace() {
+  const [listings, setListings] = useState([]);
+  const [userRole, setUserRole] = useState(null); // null = not logged in, "seller", "recycler"
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. Fetch public available listings
+        const res = await fetch("http://localhost:5000/api/materials");
+        if (!res.ok) throw new Error("Failed to load marketplace");
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || "Error");
+
+        // Filter only available
+        const available = json.materials.filter(m => m.status === "available");
+        setListings(available);
+
+        // 2. Check logged-in user role (optional – no token = guest)
+        const token = localStorage.getItem("token");
+        if (token) {
+          const userRes = await fetch("http://localhost:5000/api/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (userRes.ok) {
+            const userJson = await userRes.json();
+            setUserRole(userJson.user?.role || null);
+          }
+        }
+
+        setLoading(false);
+      } catch (err) {
+        setError(err.message || "Could not load available materials");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const isLoggedInAsAllowed = userRole === "seller" || userRole === "recycler";
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '80px 20px' }}>Loading marketplace...</div>;
+  if (error) return <div style={{ color: 'red', textAlign: 'center', padding: '80px 20px' }}>Error: {error}</div>;
+
   return (
     <Page>
       <Header>
@@ -326,19 +303,25 @@ export default function Marketplace() {
       <StatsRow>
         <StatsInner>
           <Stat>
-            <strong>6</strong>
+            <strong>{listings.length}</strong>
             <span>Total Listings</span>
           </Stat>
           <Stat>
-            <strong style={{ color: "#0A9B47" }}>5</strong>
+            <strong style={{ color: "#0A9B47" }}>{listings.length}</strong>
             <span>Available Now</span>
           </Stat>
           <Stat>
-            <strong>220 kg</strong>
+            <strong>
+              {listings.reduce((sum, item) => sum + item.quantity, 0)} kg
+            </strong>
             <span>Total Weight</span>
           </Stat>
           <Stat>
-            <strong>₦163</strong>
+            <strong>
+              ₦{listings.length > 0 
+                ? (listings.reduce((sum, item) => sum + item.pricePerUnit, 0) / listings.length).toFixed(0)
+                : 0}
+            </strong>
             <span>Avg. Price/kg</span>
           </Stat>
         </StatsInner>
@@ -365,57 +348,86 @@ export default function Marketplace() {
               </InputWrap>
 
               <InputWrap>
-                <select defaultValue="all">
-                  <option value="all">All Status</option>
+                <select defaultValue="available">
                   <option value="available">Available</option>
+                  <option value="all">All Status</option>
                   <option value="pending">Pending</option>
                 </select>
               </InputWrap>
             </FilterRow>
 
-            <ResultsText>Showing 6 results</ResultsText>
+            <ResultsText>Showing {listings.length} available results</ResultsText>
           </FilterCard>
 
           <Grid>
-            {listingsData.map((item) => (
-              <Card key={item.id}>
-                <Img />
+            {listings.map((item) => (
+              <Card key={item._id}>
+                <Img 
+                  style={item.photo ? { backgroundImage: `url(${item.photo.startsWith('http') ? item.photo : 'http://localhost:5000' + item.photo})` } : {}} 
+                />
                 <CardBody>
                   <Row>
                     <Name>{item.title}</Name>
-                    <Badge $type={item.status}>{item.status === "available" ? "Available" : "Pending"}</Badge>
+                    <Badge $type={item.status}>
+                      {item.status === "available" ? "Available" : item.status}
+                    </Badge>
                   </Row>
 
-                  <Row style={{ marginTop: 8 }}>
-                    <div />
-                    <Tag $tone={item.tagTone}>{item.tag}</Tag>
-                  </Row>
+                  {item.category && (
+                    <Row style={{ marginTop: 8 }}>
+                      <div />
+                      <Tag $tone="#EAF3FF">{item.category}</Tag>
+                    </Row>
+                  )}
 
-                  <Desc>{item.desc}</Desc>
+                  <Desc>{item.description || "No description provided"}</Desc>
 
                   <Meta>
-                    <span><FiBox /> {item.weightKg} kg</span>
+                    <span><FiBox /> {item.quantity} {item.unit}</span>
                     <span><FiMapPin /> {item.location}</span>
-                    <span><FiUser /> {item.seller}</span>
+                    <span><FiUser /> {item.seller?.fullName || "Seller"}</span>
                     <span />
                   </Meta>
 
                   <PriceRow>
                     <Price>
-                      <strong>₦{item.totalPrice.toLocaleString()}</strong>
+                      <strong>₦{(item.pricePerUnit * item.quantity).toLocaleString()}</strong>
                       <div>Total Price</div>
                     </Price>
                     <PerKg>
-                      <div>Per kg</div>
-                      <strong>₦{item.perKg}</strong>
+                      <div>Per {item.unit}</div>
+                      <strong>₦{Number(item.pricePerUnit).toLocaleString()}</strong>
                     </PerKg>
                   </PriceRow>
 
-                  <Button to={`/listings/${item.id}`}>View Details</Button>
+                  {/* View Details button - disabled for non-logged-in / wrong role */}
+                  <Button 
+                    to={isLoggedInAsAllowed ? `/listings/${item._id}` : "#"}
+                    $disabled={!isLoggedInAsAllowed}
+                    onClick={(e) => {
+                      if (!isLoggedInAsAllowed) {
+                        e.preventDefault();
+                        alert("Please log in as a seller or recycler to view details");
+                      }
+                    }}
+                  >
+                    View Details
+                  </Button>
+
+                  {!isLoggedInAsAllowed && (
+                    <DisabledText>Please log in as seller or recycler to view details</DisabledText>
+                  )}
                 </CardBody>
               </Card>
             ))}
           </Grid>
+
+          {listings.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#6b7280' }}>
+              No available materials found at the moment.<br />
+              Check back later or log in to see more.
+            </div>
+          )}
         </Container>
       </Body>
     </Page>

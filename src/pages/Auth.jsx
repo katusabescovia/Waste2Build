@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import styled from "styled-components";
 import { FiMail, FiLock, FiUser, FiMapPin, FiPhone, FiEye, FiEyeOff } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
+const API_BASE = "http://localhost:5000/api/auth"; // ← your backend URL
 
 const Page = styled.div`
   padding: 0 0 60px;
@@ -209,11 +212,29 @@ const Hint = styled.p`
   line-height: 1.6;
 `;
 
+const ErrorMessage = styled.p`
+  color: #ef4444;
+  font-size: 13px;
+  margin: 8px 0 0;
+  text-align: center;
+`;
+
+const SuccessMessage = styled.p`
+  color: #10b981;
+  font-size: 13px;
+  margin: 8px 0 0;
+  text-align: center;
+  font-weight: 600;
+`;
+
 export default function Auth() {
   const [mode, setMode] = useState("login"); // login | signup
   const [role, setRole] = useState("seller"); // seller | recycler
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [form, setForm] = useState({
     fullName: "",
@@ -239,12 +260,75 @@ export default function Auth() {
     return true;
   }, [form, isSignup]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccessMsg("");
+    setLoading(true);
 
-    // For now: UI-only (we will connect axios + context after all screens are done)
-    if (role === "seller") navigate("/seller/dashboard");
-    if (role === "recycler") navigate("/recycler/portal");
+    try {
+      let response;
+
+      if (isSignup) {
+        // Signup payload
+        const payload = {
+          fullName: form.fullName,
+          phone: form.phone,
+          location: form.location,
+          email: form.email,
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+          role: role,
+        };
+
+        response = await axios.post(`${API_BASE}/register`, payload);
+
+        if (response.data.success) {
+          setSuccessMsg("Successfully registered! Please login to continue");
+          setMode("login"); // switch to login mode automatically
+          // Clear form except email (convenience)
+          setForm((prev) => ({
+            ...prev,
+            fullName: "",
+            phone: "",
+            location: "",
+            password: "",
+            confirmPassword: "",
+          }));
+        }
+      } else {
+        // Login payload
+        const payload = {
+          email: form.email,
+          password: form.password,
+        };
+
+        response = await axios.post(`${API_BASE}/login`, payload);
+
+        if (response.data.success && response.data.token) {
+          const { token, user } = response.data;
+
+          localStorage.setItem("token", token);
+          localStorage.setItem("user", JSON.stringify(user));
+
+          // Redirect only after successful LOGIN
+          if (user.role === "seller") {
+            navigate("/seller/dashboard");
+          } else if (user.role === "recycler") {
+            navigate("/recycler/portal");
+          } else {
+            setError("Unknown role received from server");
+          }
+        }
+      }
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        "Something went wrong. Please check your connection and try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -365,8 +449,15 @@ export default function Auth() {
                     </Field>
                   )}
 
-                  <Submit type="submit" disabled={!canSubmit}>
-                    {isSignup ? "Create Account" : "Login"}
+                  {error && <ErrorMessage>{error}</ErrorMessage>}
+                  {successMsg && <SuccessMessage>{successMsg}</SuccessMessage>}
+
+                  <Submit type="submit" disabled={!canSubmit || loading}>
+                    {loading
+                      ? "Processing..."
+                      : isSignup
+                      ? "Create Account"
+                      : "Login"}
                   </Submit>
 
                   <SwitchText>

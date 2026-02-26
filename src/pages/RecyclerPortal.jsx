@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import styled from "styled-components";
 import { FiBox, FiCheckCircle, FiClock, FiLayers, FiEye, FiCheck } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
@@ -83,8 +83,8 @@ const StatIcon = styled.div`
 `;
 
 const StatLabel = styled.div`
-  color: ${({ theme }) => theme.colors.muted};
   font-size: 12px;
+  color: ${({ theme }) => theme.colors.muted};
   font-weight: 900;
 `;
 
@@ -104,7 +104,6 @@ const Panel = styled.div`
 
 const PanelHead = styled.div`
   padding: 14px 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
 const PanelTitle = styled.div`
@@ -196,7 +195,12 @@ const Badge = styled.span`
     if ($type === "available") return "#E9FBF1";
     if ($type === "pending") return "#FFF7E6";
     if ($type === "accepted") return "#EAF3FF";
+    if ($type === "pickup_confirmed") return "#DCFCE7"; // light green for confirmed
     return "#F1F5F9";
+  }};
+  color: ${({ $type }) => {
+    if ($type === "pickup_confirmed") return "#166534";
+    return "inherit";
   }};
 `;
 
@@ -247,40 +251,91 @@ const Empty = styled.div`
   line-height: 1.6;
 `;
 
-const MOCK = [
-  { id: "1", title: "Clean PET Plastic Bottles", location: "Lagos, Nigeria", weightKg: 25, pricePerKg: 150, status: "available" },
-  { id: "2", title: "HDPE Plastic Containers", location: "Abuja, Nigeria", weightKg: 40, pricePerKg: 180, status: "available" },
-  { id: "3", title: "Mixed Plastic Bags", location: "Port Harcourt, Nigeria", weightKg: 15, pricePerKg: 120, status: "pending" },
-  { id: "4", title: "PP Plastic Scraps", location: "Kano, Nigeria", weightKg: 60, pricePerKg: 200, status: "available" },
-];
-
 export default function RecyclerPortal() {
   const [tab, setTab] = useState("all"); // all | available | pending | accepted
-  const [acceptedIds, setAcceptedIds] = useState([]);
+  const [listings, setListings] = useState([]); // all materials from DB
+  const [myAccepted, setMyAccepted] = useState([]); // my accepted from DB
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [userName, setUserName] = useState("Recycler");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const rows = useMemo(() => {
-    const withAccepted = MOCK.map((x) => (acceptedIds.includes(x.id) ? { ...x, status: "accepted" } : x));
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token");
 
-    if (tab === "all") return withAccepted;
-    if (tab === "available") return withAccepted.filter((x) => x.status === "available");
-    if (tab === "pending") return withAccepted.filter((x) => x.status === "pending");
-    if (tab === "accepted") return withAccepted.filter((x) => x.status === "accepted");
-    return withAccepted;
-  }, [tab, acceptedIds]);
+        if (!token) {
+          setError("Please log in as a recycler");
+          setLoading(false);
+          return;
+        }
+
+        // 1. Recycler dashboard stats
+        const statsRes = await fetch("http://localhost:5000/api/materials/recycler/dashboard", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!statsRes.ok) throw new Error("Failed to load dashboard stats");
+        const statsJson = await statsRes.json();
+        setDashboardStats(statsJson);
+
+        // 2. All materials (public)
+        const allRes = await fetch("http://localhost:5000/api/materials");
+        if (!allRes.ok) throw new Error("Failed to load materials");
+        const allJson = await allRes.json();
+        setListings(allJson.materials || []);
+
+        // 3. My accepted listings (includes pickup_confirmed)
+        const acceptedRes = await fetch("http://localhost:5000/api/materials/my-accepted", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!acceptedRes.ok) throw new Error("Failed to load accepted listings");
+        const acceptedJson = await acceptedRes.json();
+        setMyAccepted(acceptedJson.materials || []);
+
+        // 4. User name
+        const userRes = await fetch("http://localhost:5000/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (userRes.ok) {
+          const userJson = await userRes.json();
+          setUserName(userJson.user?.fullName || "Recycler");
+        }
+
+        setLoading(false);
+      } catch (err) {
+        setError(err.message || "Failed to load data");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const rows = useMemo(() => {
+    if (tab === "all") return listings;
+    if (tab === "available") return listings.filter((x) => x.status === "available");
+    if (tab === "pending") return myAccepted.filter((x) => x.status === "accepted");
+    if (tab === "accepted") {
+      // Show both "accepted" (pending pickup) and "pickup_confirmed" (completed)
+      return myAccepted.filter((x) => x.status === "accepted" || x.status === "pickup_confirmed");
+    }
+    return [];
+  }, [tab, listings, myAccepted]);
 
   const stats = useMemo(() => {
-    const base = MOCK.length;
-    const available = MOCK.filter((x) => x.status === "available").length;
-    const pending = MOCK.filter((x) => x.status === "pending").length;
-    const accepted = acceptedIds.length;
-    return { base, available, pending, accepted };
-  }, [acceptedIds]);
+    if (!dashboardStats) return { base: 0, available: 0, pending: 0, accepted: 0 };
+
+    return {
+      base: listings.length,
+      available: dashboardStats.availableProducts || 0,
+      pending: myAccepted.filter((x) => x.status === "accepted").length,
+      accepted: myAccepted.filter((x) => x.status === "accepted" || x.status === "pickup_confirmed").length,
+    };
+  }, [dashboardStats, listings, myAccepted]);
 
   const acceptListing = (id) => {
-    if (acceptedIds.includes(id)) return;
-    setAcceptedIds((p) => [...p, id]);
-    // UI-only: take recycler to listing details page (your accept listing/details screen)
     navigate(`/listings/${id}`);
   };
 
@@ -288,6 +343,7 @@ export default function RecyclerPortal() {
     if (status === "available") return <FiCheckCircle />;
     if (status === "pending") return <FiClock />;
     if (status === "accepted") return <FiCheck />;
+    if (status === "pickup_confirmed") return <FiCheckCircle />; // confirmed icon
     return <FiLayers />;
   };
 
@@ -295,8 +351,12 @@ export default function RecyclerPortal() {
     if (status === "available") return "Available";
     if (status === "pending") return "Pending";
     if (status === "accepted") return "Accepted";
+    if (status === "pickup_confirmed") return "Pickup Confirmed";
     return "All";
   };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <Page>
@@ -304,7 +364,7 @@ export default function RecyclerPortal() {
         <Container>
           <HeadRow>
             <div>
-              <Title>Recycler Portal</Title>
+              <Title>Welcome back, {userName}!</Title>
               <Sub>Browse listings, accept materials, and manage pickups from sellers across Nigeria.</Sub>
             </div>
           </HeadRow>
@@ -370,16 +430,16 @@ export default function RecyclerPortal() {
             </PanelHead>
 
             <Tabs>
-              <Tab type="button" $active={tab === "all"} onClick={() => setTab("all")}>
+              <Tab $active={tab === "all"} onClick={() => setTab("all")}>
                 All
               </Tab>
-              <Tab type="button" $active={tab === "available"} onClick={() => setTab("available")}>
+              <Tab $active={tab === "available"} onClick={() => setTab("available")}>
                 Available
               </Tab>
-              <Tab type="button" $active={tab === "pending"} onClick={() => setTab("pending")}>
+              <Tab $active={tab === "pending"} onClick={() => setTab("pending")}>
                 Pending
               </Tab>
-              <Tab type="button" $active={tab === "accepted"} onClick={() => setTab("accepted")}>
+              <Tab $active={tab === "accepted"} onClick={() => setTab("accepted")}>
                 Accepted
               </Tab>
             </Tabs>
@@ -390,24 +450,25 @@ export default function RecyclerPortal() {
               ) : (
                 <Table>
                   {rows.map((x) => {
-                    const total = x.weightKg * x.pricePerKg;
-                    const isAccepted = x.status === "accepted";
+                    const total = x.quantity * x.pricePerUnit;
+                    const isConfirmed = x.status === "pickup_confirmed";
+                    const isAccepted = x.status === "accepted" || isConfirmed;
 
                     return (
-                      <Row key={x.id}>
+                      <Row key={x._id}>
                         <TitleCol>
                           <ItemTitle>{x.title}</ItemTitle>
                           <ItemSub>{x.location}</ItemSub>
                         </TitleCol>
 
                         <Small>
-                          <strong>{x.weightKg}kg</strong>
+                          <strong>{x.quantity} {x.unit}</strong>
                           <div>Weight</div>
                         </Small>
 
                         <Small>
-                          <strong>₦{x.pricePerKg}</strong>
-                          <div>Per kg</div>
+                          <strong>₦{x.pricePerUnit?.toLocaleString() || "N/A"}</strong>
+                          <div>Per {x.unit}</div>
                         </Small>
 
                         <Small>
@@ -416,12 +477,20 @@ export default function RecyclerPortal() {
                         </Small>
 
                         <Actions>
-                          <LinkBtn to={`/listings/${x.id}`}>
+                          <LinkBtn to={`/listings/${x._id}`}>
                             <FiEye /> View
                           </LinkBtn>
 
-                          <Btn type="button" onClick={() => acceptListing(x.id)} disabled={isAccepted || x.status === "pending"}>
-                            {isAccepted ? (
+                          <Btn
+                            type="button"
+                            onClick={() => acceptListing(x._id)}
+                            disabled={isAccepted}
+                          >
+                            {isConfirmed ? (
+                              <>
+                                <FiCheckCircle /> Confirmed
+                              </>
+                            ) : isAccepted ? (
                               <>
                                 <FiCheck /> Accepted
                               </>

@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import styled from "styled-components";
 import { FiUploadCloud, FiMapPin, FiTag, FiFileText, FiBox, FiDollarSign } from "react-icons/fi";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+
+// Backend base URL (change to production later, e.g. https://api.waste2build.com)
+const BASE_URL = "http://localhost:5000";
+const API_BASE = `${BASE_URL}/api/materials`;
 
 const Page = styled.div`
   padding: 0 0 60px;
@@ -154,8 +159,7 @@ const Preview = styled.div`
 `;
 
 const Form = styled.form`
-  display: grid;
-  gap: 12px;
+  margin-top: 12px;
 `;
 
 const Row2 = styled.div`
@@ -264,32 +268,53 @@ const Note = styled.div`
   line-height: 1.6;
 `;
 
+const ErrorMessage = styled.p`
+  color: #ef4444;
+  font-size: 13px;
+  margin: 8px 0 0;
+  text-align: center;
+`;
+
+const SuccessMessage = styled.p`
+  color: #10b981;
+  font-size: 14px;
+  margin: 8px 0 0;
+  text-align: center;
+  font-weight: 600;
+`;
+
 export default function CreateListing() {
   const [photos, setPhotos] = useState([]);
   const [form, setForm] = useState({
     title: "",
-    category: "plastic",
+    category: "Pet Plastic Bottles (Water, Soda)",
     description: "",
-    location: "",
-    weightKg: "",
-    pricePerKg: "",
+    unit: "kgs",
+    quantity: "",
+    pricePerUnit: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(""); // ← new state for success message
+
+  const navigate = useNavigate();
 
   const onChange = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
 
   const totalPrice = useMemo(() => {
-    const w = Number(form.weightKg);
-    const p = Number(form.pricePerKg);
-    if (!w || !p) return 0;
-    return w * p;
-  }, [form.weightKg, form.pricePerKg]);
+    const q = Number(form.quantity);
+    const p = Number(form.pricePerUnit);
+    if (isNaN(q) || isNaN(p)) return 0;
+    return q * p;
+  }, [form.quantity, form.pricePerUnit]);
 
   const canSubmit = useMemo(() => {
-    if (!form.title) return false;
-    if (!form.description) return false;
-    if (!form.location) return false;
-    if (!form.weightKg || Number(form.weightKg) <= 0) return false;
-    if (!form.pricePerKg || Number(form.pricePerKg) <= 0) return false;
+    if (!form.title.trim()) return false;
+    if (!form.description.trim()) return false;
+    if (!form.category) return false;
+    if (!form.unit) return false;
+    if (!form.quantity || Number(form.quantity) <= 0) return false;
+    if (!form.pricePerUnit || Number(form.pricePerUnit) <= 0) return false;
     return true;
   }, [form]);
 
@@ -299,10 +324,64 @@ export default function CreateListing() {
     setPhotos(next);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // UI only for now — we will connect axios + backend after all screens are done.
-    alert("Listing created (UI only). Next we will connect backend!");
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setError("Please login first to create a listing");
+        navigate("/auth");
+        return;
+      }
+
+      const formData = new FormData();
+
+      formData.append("title", form.title.trim());
+      formData.append("description", form.description.trim());
+      formData.append("category", form.category);
+      formData.append("unit", form.unit);
+      formData.append("quantity", form.quantity);
+      formData.append("pricePerUnit", form.pricePerUnit);
+
+      if (photos.length > 0) {
+        formData.append("photo", photos[0].file);
+      }
+
+      const response = await axios.post(API_BASE, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        setSuccess("Listing created successfully! Redirecting to dashboard...");
+        // Redirect after short delay so user sees the success message
+        setTimeout(() => {
+          navigate("/seller/dashboard");
+        }, 1500); // 1.5 seconds delay
+      }
+    } catch (err) {
+      let msg = "Failed to create listing. Please try again.";
+
+      if (err.response?.data?.message) {
+        msg = err.response.data.message; // ← real backend message
+      }
+
+      if (err.response?.status === 401) {
+        msg = "Session expired or not authorized. Please login again.";
+        localStorage.removeItem("token");
+        navigate("/auth");
+      }
+
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -385,20 +464,25 @@ export default function CreateListing() {
                         <InputWrap>
                           <Icon><FiBox /></Icon>
                           <select value={form.category} onChange={onChange("category")}>
-                            <option value="plastic">Plastic</option>
-                            <option value="metal">Metal</option>
-                            <option value="paper">Paper</option>
-                            <option value="glass">Glass</option>
-                            <option value="other">Other</option>
+                            <option value="Pet Plastic Bottles (Water, Soda)">Pet Plastic Bottles (Water, Soda)</option>
+                            <option value="Sachet Plastics (Pure Water)">Sachet Plastics (Pure Water)</option>
+                            <option value="Plastic Plates">Plastic Plates</option>
+                            <option value="HDPE Plastic Containers">HDPE Plastic Containers</option>
+                            <option value="Plastic Bags">Plastic Bags</option>
+                            <option value="Other Plastic Waste">Other Plastic Waste</option>
                           </select>
                         </InputWrap>
                       </Field>
 
                       <Field>
-                        <Label>Location</Label>
+                        <Label>Unit</Label>
                         <InputWrap>
-                          <Icon><FiMapPin /></Icon>
-                          <input value={form.location} onChange={onChange("location")} placeholder="e.g., Ikeja, Lagos" />
+                          <Icon><FiBox /></Icon>
+                          <select value={form.unit} onChange={onChange("unit")}>
+                            <option value="tons">Tons</option>
+                            <option value="kgs">Kgs</option>
+                            <option value="g">Grams</option>
+                          </select>
                         </InputWrap>
                       </Field>
                     </Row2>
@@ -417,28 +501,29 @@ export default function CreateListing() {
 
                     <Row2>
                       <Field>
-                        <Label>Weight (kg)</Label>
+                        <Label>Quantity</Label>
                         <InputWrap>
                           <Icon><FiBox /></Icon>
                           <input
                             type="number"
-                            value={form.weightKg}
-                            onChange={onChange("weightKg")}
-                            placeholder="e.g., 25"
-                            min="0"
+                            step="0.001"
+                            value={form.quantity}
+                            onChange={onChange("quantity")}
+                            placeholder="e.g., 100"
+                            min="0.001"
                           />
                         </InputWrap>
                       </Field>
 
                       <Field>
-                        <Label>Price per kg (₦)</Label>
+                        <Label>Price per Unit (₦)</Label>
                         <InputWrap>
                           <Icon><FiDollarSign /></Icon>
                           <input
                             type="number"
-                            value={form.pricePerKg}
-                            onChange={onChange("pricePerKg")}
-                            placeholder="e.g., 150"
+                            value={form.pricePerUnit}
+                            onChange={onChange("pricePerUnit")}
+                            placeholder="e.g., 380"
                             min="0"
                           />
                         </InputWrap>
@@ -448,12 +533,12 @@ export default function CreateListing() {
                     <Summary>
                       <SummaryTitle>Pricing Summary</SummaryTitle>
                       <SummaryRow>
-                        <span>Total weight</span>
-                        <strong>{form.weightKg ? `${form.weightKg} kg` : "—"}</strong>
+                        <span>Total quantity</span>
+                        <strong>{form.quantity ? `${form.quantity} ${form.unit}` : "—"}</strong>
                       </SummaryRow>
                       <SummaryRow>
-                        <span>Price per kg</span>
-                        <strong>{form.pricePerKg ? `₦${Number(form.pricePerKg).toLocaleString()}` : "—"}</strong>
+                        <span>Price per unit</span>
+                        <strong>{form.pricePerUnit ? `₦${Number(form.pricePerUnit).toLocaleString()}` : "—"}</strong>
                       </SummaryRow>
                       <SummaryRow>
                         <span>Total price</span>
@@ -461,8 +546,11 @@ export default function CreateListing() {
                       </SummaryRow>
                     </Summary>
 
-                    <Submit type="submit" disabled={!canSubmit}>
-                      Create Listing
+                    {error && <ErrorMessage>{error}</ErrorMessage>}
+                    {success && <SuccessMessage>{success}</SuccessMessage>}
+
+                    <Submit type="submit" disabled={!canSubmit || loading}>
+                      {loading ? "Creating..." : "Create Listing"}
                     </Submit>
 
                     <Note>

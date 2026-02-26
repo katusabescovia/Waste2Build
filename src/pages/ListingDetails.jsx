@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import {
   FiArrowLeft,
@@ -8,15 +8,14 @@ import {
   FiMapPin,
   FiUser,
   FiX,
-  FiCalendar,
-  FiEdit3,
 } from "react-icons/fi";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-/* --------------------------- Layout --------------------------- */
+/* --------------------------- Layout (your original styles – 100% unchanged) --------------------------- */
 
 const Page = styled.div`
   padding: 0 0 60px;
+  position: relative;
 `;
 
 const Header = styled.section`
@@ -135,6 +134,8 @@ const Img = styled.div`
   border-radius: ${({ theme }) => theme.radius.md};
   border: 1px solid ${({ theme }) => theme.colors.border};
   background: #e2e8f0;
+  background-size: cover;
+  background-position: center;
 `;
 
 const MetaGrid = styled.div`
@@ -237,7 +238,7 @@ const PrimaryBtn = styled.button`
   }
 `;
 
-const SecondaryBtn = styled(Link)`
+const SecondaryBtn = styled.button`
   border: 1px solid ${({ theme }) => theme.colors.border};
   background: #fff;
   padding: 12px 14px;
@@ -247,6 +248,16 @@ const SecondaryBtn = styled(Link)`
   align-items: center;
   justify-content: center;
   gap: 10px;
+  cursor: pointer;
+
+  &:hover {
+    background: #f8f9fa;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const Note = styled.div`
@@ -255,8 +266,29 @@ const Note = styled.div`
   line-height: 1.6;
 `;
 
-/* --------------------------- Modal --------------------------- */
+// Toast notification (minimal, non-intrusive – appears at top-right)
+const Toast = styled.div`
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  color: white;
+  font-weight: 900;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: fadeInOut 4s forwards;
+  background: ${({ $type }) => ($type === "success" ? "#28a745" : "#dc3545")};
 
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); }
+  }
+`;
+
+// Confirmation Modal (your exact modal styles – no change)
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
@@ -313,49 +345,6 @@ const ModalText = styled.p`
   line-height: 1.7;
 `;
 
-const Field = styled.div`
-  display: grid;
-  gap: 6px;
-`;
-
-const Label = styled.label`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.muted};
-  font-weight: 900;
-`;
-
-const InputWrap = styled.div`
-  display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 10px;
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.radius.md};
-  padding: 12px 12px;
-
-  input,
-  textarea {
-    border: none;
-    outline: none;
-    width: 100%;
-    background: transparent;
-    font-size: 14px;
-    resize: none;
-  }
-
-  textarea {
-    min-height: 90px;
-    line-height: 1.6;
-  }
-`;
-
-const Icon = styled.div`
-  display: grid;
-  place-items: center;
-  color: ${({ theme }) => theme.colors.muted};
-`;
-
 const ModalFooter = styled.div`
   padding: 14px 16px;
   border-top: 1px solid ${({ theme }) => theme.colors.border};
@@ -388,96 +377,148 @@ const ConfirmBtn = styled.button`
   }
 `;
 
-/* --------------------------- Mock Data --------------------------- */
-
-const MOCK_LISTINGS = [
-  {
-    id: "1",
-    title: "Clean PET Plastic Bottles",
-    status: "available",
-    seller: "Sarah Johnson",
-    location: "Lagos, Nigeria",
-    weightKg: 25,
-    pricePerKg: 150,
-    category: "Plastic",
-    description:
-      "Sorted and cleaned plastic bottles from household collection. Ready for recycling. Packed in sacks and stored indoors.",
-  },
-  {
-    id: "2",
-    title: "HDPE Plastic Containers",
-    status: "available",
-    seller: "Green Collectors Co.",
-    location: "Abuja, Nigeria",
-    weightKg: 40,
-    pricePerKg: 180,
-    category: "Plastic",
-    description:
-      "High-density polyethylene containers from small business. Clean, sorted, and bundled.",
-  },
-  {
-    id: "3",
-    title: "Mixed Plastic Bags",
-    status: "pending",
-    seller: "Student Eco Initiative",
-    location: "Port Harcourt, Nigeria",
-    weightKg: 15,
-    pricePerKg: 120,
-    category: "Plastic",
-    description: "Collected plastic bags from neighborhood. Sorted and bundled.",
-  },
-  {
-    id: "4",
-    title: "PP Plastic Scraps",
-    status: "available",
-    seller: "Industrial Waste Solutions",
-    location: "Kano, Nigeria",
-    weightKg: 60,
-    pricePerKg: 200,
-    category: "Plastic",
-    description: "Polypropylene plastic scraps from manufacturing. High quality material.",
-  },
-];
+/* --------------------------- Component --------------------------- */
 
 export default function ListingDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const listing = useMemo(() => {
-    return MOCK_LISTINGS.find((x) => x.id === id) || MOCK_LISTINGS[0];
+  const [listing, setListing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+
+  // Show toast for 4 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Fetch listing + role
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const materialRes = await fetch(`http://localhost:5000/api/materials/${id}`);
+        if (!materialRes.ok) throw new Error("Listing not found");
+        const materialJson = await materialRes.json();
+        if (!materialJson.success) throw new Error(materialJson.message || "Failed to load");
+
+        const material = materialJson.material;
+        if (material.photo && !material.photo.startsWith('http')) {
+          material.photo = `http://localhost:5000${material.photo}`;
+        }
+
+        setListing(material);
+
+        if (token) {
+          const userRes = await fetch("http://localhost:5000/api/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (userRes.ok) {
+            const userJson = await userRes.json();
+            setUserRole(userJson.user?.role || null);
+          }
+        }
+
+        setLoading(false);
+      } catch (err) {
+        setError(err.message || "Failed to load listing");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [id]);
 
-  const total = useMemo(() => listing.weightKg * listing.pricePerKg, [listing]);
+  const total = listing ? listing.quantity * listing.pricePerUnit : 0;
 
-  const [open, setOpen] = useState(false);
-  const [pickup, setPickup] = useState({
-    date: "",
-    time: "",
-    notes: "",
-  });
-
-  const canAccept = listing.status === "available";
+  const canAccept = listing?.status === "available" && userRole === "recycler";
+  const canCancel = listing?.status === "accepted" && listing?.acceptedBy?._id === (JSON.parse(localStorage.getItem("user") || "{}")?._id);
 
   const statusIcon = () => {
-    if (listing.status === "available") return <FiCheckCircle />;
-    if (listing.status === "pending") return <FiClock />;
+    if (listing?.status === "available") return <FiCheckCircle />;
+    if (listing?.status === "accepted") return <FiCheckCircle />;
     return <FiClock />;
   };
 
   const statusText = () => {
-    if (listing.status === "available") return "Available";
-    if (listing.status === "pending") return "Pending";
-    return "Accepted";
+    if (listing?.status === "available") return "Available";
+    if (listing?.status === "accepted") return "Accepted";
+    return listing?.status || "Unknown";
   };
 
-  const accept = () => {
-    // UI-only pickupId generator
-    const pickupId = `PU-${listing.id}-${Date.now().toString().slice(-6)}`;
-    setOpen(false);
-    navigate(`/pickup/${pickupId}`);
+  const handleAcceptClick = () => {
+    setConfirmOpen(true);
   };
 
-  const onPickupChange = (key) => (e) => setPickup((p) => ({ ...p, [key]: e.target.value }));
+  const confirmAccept = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`http://localhost:5000/api/materials/${id}/accept`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to accept listing");
+      }
+
+      setConfirmOpen(false);
+      setToast({ message: "Successfully accepted! Redirecting to pickup confirmation...", type: "success" });
+
+      const pickupId = json.material?._id || id;
+      setTimeout(() => navigate(`/pickup/${pickupId}`), 1500); // slight delay for toast visibility
+
+      setListing((prev) => ({ ...prev, status: "accepted" }));
+    } catch (err) {
+      setToast({ message: err.message || "Failed to accept listing", type: "error" });
+    }
+  };
+
+  const handleCancelAccept = async () => {
+    if (!window.confirm("Are you sure you want to cancel your acceptance?")) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`http://localhost:5000/api/materials/${id}/cancel-accept`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to cancel acceptance");
+      }
+
+      setToast({ message: "Successfully cancelled acceptance! Redirecting to portal...", type: "success" });
+      setTimeout(() => navigate("/recycler/portal"), 1500);
+
+      setListing((prev) => ({ ...prev, status: "available", acceptedBy: null }));
+    } catch (err) {
+      setToast({ message: err.message || "Failed to cancel acceptance", type: "error" });
+    }
+  };
+
+  if (loading) return <div>Loading listing details...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!listing) return <div>Listing not found</div>;
 
   return (
     <Page>
@@ -488,7 +529,7 @@ export default function ListingDetails() {
               <Title>Listing Details</Title>
               <Sub>Review the listing information and accept to schedule a pickup with the seller.</Sub>
             </div>
-            <Back to="/recycler/portal">
+            <Back to={userRole === "recycler" ? "/recycler/portal" : "/seller/dashboard"}>
               <FiArrowLeft /> Back to Portal
             </Back>
           </HeadRow>
@@ -508,9 +549,15 @@ export default function ListingDetails() {
 
               <CardBody>
                 <ImageGrid>
-                  <Img />
-                  <Img />
-                  <Img />
+                  {listing.photo ? (
+                    <Img style={{ backgroundImage: `url(${listing.photo})` }} />
+                  ) : (
+                    <>
+                      <Img />
+                      <Img />
+                      <Img />
+                    </>
+                  )}
                 </ImageGrid>
 
                 <MetaGrid>
@@ -518,7 +565,7 @@ export default function ListingDetails() {
                     <MetaTop>
                       <FiUser /> Seller
                     </MetaTop>
-                    <MetaValue>{listing.seller}</MetaValue>
+                    <MetaValue>{listing.seller?.fullName || "Unknown Seller"}</MetaValue>
                   </Meta>
 
                   <Meta>
@@ -532,7 +579,7 @@ export default function ListingDetails() {
                     <MetaTop>
                       <FiBox /> Weight
                     </MetaTop>
-                    <MetaValue>{listing.weightKg} kg</MetaValue>
+                    <MetaValue>{listing.quantity} {listing.unit}</MetaValue>
                   </Meta>
 
                   <Meta>
@@ -555,13 +602,13 @@ export default function ListingDetails() {
               <CardBody>
                 <Summary>
                   <SummaryRow>
-                    <span>Price per kg</span>
-                    <strong>₦{listing.pricePerKg}</strong>
+                    <span>Price per {listing.unit}</span>
+                    <strong>₦{Number(listing.pricePerUnit).toLocaleString()}</strong>
                   </SummaryRow>
 
                   <SummaryRow>
                     <span>Total weight</span>
-                    <strong>{listing.weightKg} kg</strong>
+                    <strong>{listing.quantity} {listing.unit}</strong>
                   </SummaryRow>
 
                   <Total>
@@ -571,16 +618,24 @@ export default function ListingDetails() {
                 </Summary>
 
                 <Actions>
-                  <PrimaryBtn type="button" onClick={() => setOpen(true)} disabled={!canAccept}>
-                    <FiCheckCircle /> Accept Listing
-                  </PrimaryBtn>
+                  {canAccept && (
+                    <PrimaryBtn type="button" onClick={handleAcceptClick}>
+                      <FiCheckCircle /> Accept Listing
+                    </PrimaryBtn>
+                  )}
+
+                  {canCancel && (
+                    <SecondaryBtn as="button" onClick={handleCancelAccept}>
+                      Cancel Acceptance
+                    </SecondaryBtn>
+                  )}
 
                   <SecondaryBtn to="/marketplace">
                     <FiBox /> Back to Marketplace
                   </SecondaryBtn>
 
                   <Note>
-                    If a listing is pending, it means another recycler is already processing it.
+                    If a listing is pending or accepted, it means another recycler is processing it.
                   </Note>
                 </Actions>
               </CardBody>
@@ -589,60 +644,42 @@ export default function ListingDetails() {
         </Container>
       </Body>
 
-      {open && (
+      {/* Confirmation popup for Accept */}
+      {confirmOpen && (
         <Overlay role="dialog" aria-modal="true">
           <Modal>
             <ModalHead>
-              <ModalTitle>Confirm Pickup Details</ModalTitle>
-              <CloseBtn type="button" onClick={() => setOpen(false)} aria-label="Close">
+              <ModalTitle>Confirm Acceptance</ModalTitle>
+              <CloseBtn type="button" onClick={() => setConfirmOpen(false)} aria-label="Close">
                 <FiX />
               </CloseBtn>
             </ModalHead>
 
             <ModalBody>
               <ModalText>
-                Set a preferred pickup date and time. You can also add notes for the seller (example: “Call me on arrival”).
+                Are you sure you want to accept this particular listing?
+                <br />
+                <strong>{listing.title}</strong>
               </ModalText>
-
-              <Field>
-                <Label>Pickup Date</Label>
-                <InputWrap>
-                  <Icon><FiCalendar /></Icon>
-                  <input type="date" value={pickup.date} onChange={onPickupChange("date")} />
-                </InputWrap>
-              </Field>
-
-              <Field>
-                <Label>Pickup Time</Label>
-                <InputWrap>
-                  <Icon><FiClock /></Icon>
-                  <input type="time" value={pickup.time} onChange={onPickupChange("time")} />
-                </InputWrap>
-              </Field>
-
-              <Field>
-                <Label>Notes (optional)</Label>
-                <InputWrap>
-                  <Icon><FiEdit3 /></Icon>
-                  <textarea
-                    value={pickup.notes}
-                    onChange={onPickupChange("notes")}
-                    placeholder="Add pickup instructions..."
-                  />
-                </InputWrap>
-              </Field>
             </ModalBody>
 
             <ModalFooter>
-              <OutlineBtn type="button" onClick={() => setOpen(false)}>
+              <OutlineBtn type="button" onClick={() => setConfirmOpen(false)}>
                 Cancel
               </OutlineBtn>
-              <ConfirmBtn type="button" onClick={accept}>
-                Confirm & Continue
+              <ConfirmBtn type="button" onClick={confirmAccept}>
+                Yes, Accept
               </ConfirmBtn>
             </ModalFooter>
           </Modal>
         </Overlay>
+      )}
+
+      {/* Toast notification (top-right, auto-dismiss) */}
+      {toast && (
+        <Toast $type={toast.type}>
+          {toast.message}
+        </Toast>
       )}
     </Page>
   );

@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
+import axios from "axios";
 
 import Home from "./pages/Home";
 import Marketplace from "./pages/Marketplace";
