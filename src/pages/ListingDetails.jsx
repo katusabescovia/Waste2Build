@@ -407,7 +407,7 @@ export default function ListingDetails() {
       try {
         const token = localStorage.getItem("token");
 
-        const materialRes = await fetch(`${BASE_URL}/api/materials/${id}`);
+        const materialRes = await fetch(`${ BASE_URL}/api/materials/${id}`);
         if (!materialRes.ok) throw new Error("Listing not found");
         const materialJson = await materialRes.json();
         if (!materialJson.success) throw new Error(materialJson.message || "Failed to load");

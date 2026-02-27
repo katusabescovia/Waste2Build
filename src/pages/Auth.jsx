@@ -282,7 +282,7 @@ export default function Auth() {
           role: role,
         };
 
-        response = await axios.post(`${API_BASE}/api/auth/register`, payload);
+        response = await axios.post(`${BASE_URL}/api/auth/register`, payload);
 
         if (response.data.success) {
           setSuccessMsg("Successfully registered! Please login to continue");
@@ -304,7 +304,7 @@ export default function Auth() {
           password: form.password,
         };
 
-        response = await axios.post(`${API_BASE}/api/auth/login`, payload);
+        response = await axios.post(`${BASE_URL}/api/auth/login`, payload);
 
         if (response.data.success && response.data.token) {
           const { token, user } = response.data;
