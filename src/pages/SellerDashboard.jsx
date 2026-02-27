@@ -7,7 +7,7 @@ import axios from "axios";
 
 // Backend base URL (change to production later)
 
-const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const API_ME = `${BASE_URL}/api/auth/me`; // endpoint to get logged-in user
 
 /* --------------------------- Styles --------------------------- */
