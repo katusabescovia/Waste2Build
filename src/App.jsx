@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import axios from "axios";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
 import Marketplace from "./pages/Marketplace";
@@ -12,12 +13,14 @@ import Rewards from "./pages/Rewards";
 import RecyclerPortal from "./pages/RecyclerPortal";
 import ListingDetails from "./pages/ListingDetails";
 import PickupConfirmation from "./pages/PickupConfirmation";
+import About from "./pages/About";
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/learn" element={<Learn />} />
         <Route path="/auth" element={<Auth />} />

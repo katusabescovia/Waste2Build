@@ -801,7 +801,7 @@ export default function PickupConfirmation() {
               </NoteBox>
 
               <ButtonRow>
-                <ViewListingsBtn to="/recycler/my-accepted">View My Accepted Listings</ViewListingsBtn>
+                <ViewListingsBtn to="/recycler/portal">View My Accepted Listings</ViewListingsBtn>
                 <BrowseBtn to="/marketplace">Browse More Listings</BrowseBtn>
               </ButtonRow>
 
