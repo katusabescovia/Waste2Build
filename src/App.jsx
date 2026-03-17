@@ -14,6 +14,7 @@ import RecyclerPortal from "./pages/RecyclerPortal";
 import ListingDetails from "./pages/ListingDetails";
 import PickupConfirmation from "./pages/PickupConfirmation";
 import About from "./pages/About";
+import AdminDashboard from "./pages/AdminDashboard";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/learn" element={<Learn />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
         {/* Seller */}
         <Route path="/seller/dashboard" element={<SellerDashboard />} />
